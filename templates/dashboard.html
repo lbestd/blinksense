@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BlinkSense - Server Monitoring Dashboard</title>
+
+    <!-- Bootstrap 5 -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
+
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Custom CSS -->
+    <link href="/static/css/style.css?v={{ cache_bust }}" rel="stylesheet">
+</head>
+<body class="bg-light">
+
+    <!-- Навигационная панель -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
+        <div class="container-fluid">
+            <a class="navbar-brand d-flex align-items-center" href="/">
+                <i class="fas fa-chart-line me-2"></i>
+                <span class="fw-bold">BlinkSense</span>
+            </a>
+
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarContent">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+
+            <div class="collapse navbar-collapse" id="navbarContent">
+                <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                    <li class="nav-item">
+                        <a class="nav-link active" href="/">
+                            <i class="fas fa-home me-1"></i> Dashboard
+                        </a>
+                    </li>
+                </ul>
+
+                <div class="d-flex align-items-center gap-2">
+                    <!-- Управление лэйаутами -->
+                    <div class="dropdown">
+                        <button class="btn btn-outline-light btn-sm dropdown-toggle" type="button" id="layoutsDropdown" data-bs-toggle="dropdown">
+                            <i class="fas fa-layer-group me-1"></i>
+                            <span id="currentLayoutName">Default</span>
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end" id="layoutsList">
+                            <li><h6 class="dropdown-header">Лэйауты</h6></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li>
+                                <a class="dropdown-item" href="#" id="newLayoutBtn">
+                                    <i class="fas fa-plus text-success"></i> Новый лэйаут
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
+
+                    <!-- Добавить панель -->
+                    <button id="addPanel" class="btn btn-success btn-sm">
+                        <i class="fas fa-plus"></i> Панель
+                    </button>
+
+                    <!-- Сохранить -->
+                    <button id="saveLayout" class="btn btn-primary btn-sm">
+                        <i class="fas fa-save"></i> Сохранить
+                    </button>
+
+                    <!-- Режим редактирования -->
+                    <div class="form-check form-switch mb-0">
+                        <input class="form-check-input" type="checkbox" id="editModeToggle">
+                        <label class="form-check-label text-white-50 small" for="editModeToggle">
+                            Редактировать
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Основной контент -->
+    <main class="container-fluid py-4">
+
+        <!-- Информационная панель -->
+        <div class="row g-3 mb-4">
+            <div class="col-xl-3 col-md-6">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <p class="text-muted mb-1 small">Всего записей</p>
+                                <h3 class="mb-0 fw-bold" id="totalRecords">0</h3>
+                            </div>
+                            <div class="bg-primary bg-opacity-10 p-3 rounded">
+                                <i class="fas fa-database fa-lg text-primary"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-xl-3 col-md-6">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <p class="text-muted mb-1 small">Активные панели</p>
+                                <h3 class="mb-0 fw-bold" id="activePanels">0</h3>
+                            </div>
+                            <div class="bg-success bg-opacity-10 p-3 rounded">
+                                <i class="fas fa-chart-bar fa-lg text-success"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-xl-3 col-md-6">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <p class="text-muted mb-1 small">Размер данных</p>
+                                <h3 class="mb-0 fw-bold" id="dataSize">0 KB</h3>
+                            </div>
+                            <div class="bg-warning bg-opacity-10 p-3 rounded">
+                                <i class="fas fa-hdd fa-lg text-warning"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-xl-3 col-md-6">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <p class="text-muted mb-1 small">Время загрузки</p>
+                                <h3 class="mb-0 fw-bold" id="loadTime">0 ms</h3>
+                            </div>
+                            <div class="bg-info bg-opacity-10 p-3 rounded">
+                                <i class="fas fa-clock fa-lg text-info"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Сетка дашборда -->
+        <div class="card border-0 shadow-sm">
+            <div class="card-body p-0">
+                <div id="dashboardGrid" class="dashboard-grid">
+                    <!-- Пустое состояние -->
+                    <div class="empty-state py-5" id="emptyState">
+                        <div class="text-center">
+                            <div class="mb-4">
+                                <i class="fas fa-chart-area fa-5x text-muted opacity-25"></i>
+                            </div>
+                            <h4 class="mb-2">Дашборд пуст</h4>
+                            <p class="text-muted mb-4">Добавьте панель для визуализации данных</p>
+                            <button id="addFirstPanel" class="btn btn-primary btn-lg">
+                                <i class="fas fa-plus me-2"></i> Создать первую панель
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Модальное окно: Создание панели -->
+    <div class="modal fade" id="addPanelModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">
+                        <i class="fas fa-plus-circle me-2"></i>Создать панель
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+
+                    <!-- Выбор типа панели -->
+                    <div class="mb-4">
+                        <label class="form-label fw-semibold">
+                            <i class="fas fa-shapes me-1"></i> Тип визуализации
+                        </label>
+                        <div class="row g-3">
+                            <div class="col-6">
+                                <div class="card panel-type-card h-100" data-type="chart" style="cursor: pointer;">
+                                    <div class="card-body text-center p-4">
+                                        <i class="fas fa-chart-line fa-3x mb-3 text-primary"></i>
+                                        <h6 class="mb-1">График</h6>
+                                        <small class="text-muted">Столбцы, линии, области</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="card panel-type-card h-100" data-type="table" style="cursor: pointer;">
+                                    <div class="card-body text-center p-4">
+                                        <i class="fas fa-table fa-3x mb-3 text-success"></i>
+                                        <h6 class="mb-1">Таблица</h6>
+                                        <small class="text-muted">Табличные данные</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <input type="hidden" id="selectedPanelType" value="">
+                    </div>
+
+                    <!-- Размер панели -->
+                    <div class="mb-4">
+                        <label class="form-label fw-semibold">
+                            <i class="fas fa-expand-arrows-alt me-1"></i> Размер
+                        </label>
+                        <select id="panelSize" class="form-select">
+                            <option value="4x3">Маленький (4×3)</option>
+                            <option value="6x4" selected>Средний (6×4)</option>
+                            <option value="8x5">Большой (8×5)</option>
+                            <option value="12x6">Очень большой (12×6)</option>
+                        </select>
+                    </div>
+
+                    <!-- Название панели -->
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">
+                            <i class="fas fa-heading me-1"></i> Название
+                        </label>
+                        <input type="text" id="panelTitle" class="form-control"
+                               placeholder="Например: CPU по серверам">
+                        <div class="form-text">Можно изменить позже в настройках</div>
+                    </div>
+
+                    <!-- Подсказка -->
+                    <div class="alert alert-info mb-0">
+                        <div class="d-flex">
+                            <i class="fas fa-info-circle me-2 mt-1"></i>
+                            <div class="small">
+                                <strong>Следующий шаг:</strong> После создания настройте данные,
+                                размеры и меры в окне конфигурации панели.
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        Отмена
+                    </button>
+                    <button type="button" class="btn btn-primary" id="createPanel" disabled>
+                        <i class="fas fa-check me-1"></i> Создать
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно: Конфигурация панели -->
+    <div class="modal fade" id="panelConfigModal" tabindex="-1">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">
+                        <i class="fas fa-cog me-2"></i>
+                        <span id="panelConfigModalTitle">Настройка панели</span>
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="panelConfigContent">
+                        <div class="text-center py-5">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Загрузка...</span>
+                            </div>
+                            <p class="mt-3 text-muted">Загрузка конфигурации...</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-danger" id="deletePanel">
+                        <i class="fas fa-trash me-1"></i> Удалить
+                    </button>
+                    <div class="flex-grow-1"></div>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        Отмена
+                    </button>
+                    <button type="button" class="btn btn-primary" id="applyPanelConfig">
+                        <i class="fas fa-check me-1"></i> Применить
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно: Управление лэйаутами -->
+    <div class="modal fade" id="layoutManagerModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fas fa-layer-group me-2"></i>Управление лэйаутами
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Название нового лэйаута</label>
+                        <input type="text" id="newLayoutName" class="form-control"
+                               placeholder="Например: Production Overview">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        Отмена
+                    </button>
+                    <button type="button" class="btn btn-primary" id="createLayoutBtn">
+                        <i class="fas fa-plus me-1"></i> Создать
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- Utility Scripts -->
+    <script src="/static/js/cache.js?v={{ cache_bust }}"></script>
+
+    <!-- Core Scripts -->
+    <script src="/static/js/grid.js?v={{ cache_bust }}"></script>
+    <script src="/static/js/components/global-filters.js?v={{ cache_bust }}"></script>
+
+    <!-- Panel Scripts -->
+    <script src="/static/js/virtual-table.js?v={{ cache_bust }}"></script>
+    <script src="/static/js/panels/panel-manager.js?v={{ cache_bust }}"></script>
+    <script src="/static/js/panels/panel-config/dimensions-tab.js?v={{ cache_bust }}"></script>
+    <script src="/static/js/panels/panel-config/measures-tab.js?v={{ cache_bust }}"></script>
+    <script src="/static/js/panels/panel-config/sorting-tab.js?v={{ cache_bust }}"></script>
+    <script src="/static/js/panels/panel-config/panel-config-modal.js?v={{ cache_bust }}"></script>
+    <script src="/static/js/panels/panel-render/chart-renderer.js?v={{ cache_bust }}"></script>
+    <script src="/static/js/panels/panel-render/table-renderer.js?v={{ cache_bust }}"></script>
+
+    <!-- Main App -->
+    <script src="/static/js/app.js?v={{ cache_bust }}"></script>
+</body>
+</html>

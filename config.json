@@ -1,0 +1,133 @@
+{
+  "chart": {
+    "height": 14659
+  },
+  "table": {
+    "height": 237
+  },
+  "filters": {
+    "height": 200
+  },
+  "panels": [
+    {
+      "id": "panel-1",
+      "type": "chart",
+      "size": "5x5",
+      "config": {
+        "dimensions": [
+          {
+            "field": "timestamp",
+            "name": "Timestamp",
+            "type": "date",
+            "sortBy": "name",
+            "sortOrder": "asc"
+          }
+        ],
+        "measures": [
+          {
+            "field": "status",
+            "name": "\u041a\u043e\u043b\u0438\u0447\u0435\u0441\u0442\u0432\u043e \u0437\u0430\u043f\u0438\u0441\u0435\u0439",
+            "aggregation": "count",
+            "format": "number",
+            "categoryField": "status",
+            "isStacked": true
+          }
+        ],
+        "sorting": {
+          "dimensions": [],
+          "measures": []
+        },
+        "display": {
+          "chartType": "bar",
+          "title": "\u0432\u0444",
+          "showLegend": true,
+          "showValues": false,
+          "colorScheme": "default",
+          "stacked": true
+        }
+      },
+      "position": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "panel-2",
+      "type": "table",
+      "size": "11x5",
+      "config": {
+        "dimensions": [
+          {
+            "field": "timestamp",
+            "name": "Timestamp",
+            "type": "date",
+            "sortBy": "name",
+            "sortOrder": "desc"
+          },
+          {
+            "field": "server_name",
+            "name": "Server Name",
+            "type": "categorical",
+            "sortBy": "name",
+            "sortOrder": "asc"
+          },
+          {
+            "field": "server_ip",
+            "name": "Server Ip",
+            "type": "categorical",
+            "sortBy": "name",
+            "sortOrder": "asc"
+          },
+          {
+            "field": "environment",
+            "name": "Environment",
+            "type": "categorical",
+            "sortBy": "name",
+            "sortOrder": "asc"
+          },
+          {
+            "field": "status",
+            "name": "Status",
+            "type": "categorical",
+            "sortBy": "name",
+            "sortOrder": "asc"
+          }
+        ],
+        "measures": [
+          {
+            "field": "status",
+            "name": "\u041a\u043e\u043b\u0438\u0447\u0435\u0441\u0442\u0432\u043e \u0437\u0430\u043f\u0438\u0441\u0435\u0439",
+            "aggregation": "count",
+            "format": "number",
+            "categoryField": "status",
+            "isStacked": true
+          }
+        ],
+        "sorting": {
+          "dimensions": [
+            {
+              "field": "timestamp",
+              "sortBy": "name",
+              "order": "asc"
+            }
+          ],
+          "measures": []
+        },
+        "display": {
+          "chartType": "bar",
+          "title": "\u0432\u0432",
+          "showLegend": true,
+          "showValues": false,
+          "colorScheme": "default",
+          "stacked": true
+        }
+      },
+      "position": {
+        "x": 5,
+        "y": 0
+      }
+    }
+  ],
+  "timestamp": "2025-11-11T12:08:35.573Z",
+  "version": "1.0"
+}

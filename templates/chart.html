@@ -1,0 +1,177 @@
+<!-- Аналогичные изменения для графика -->
+<!-- Добавляем панель фильтров как в таблице -->
+<!-- Реализуем клиентское кэширование для данных графика -->
+
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4">Стекированная диаграмма</h1>
+
+        <!-- Панель фильтров -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">Фильтры данных</h5>
+            </div>
+            <div class="card-body">
+                <div class="row" id="filtersPanel">
+                    <!-- Фильтры будут добавляться динамически -->
+                </div>
+                <div class="row mt-3">
+                    <div class="col-12">
+                        <button id="applyFilters" class="btn btn-primary">Применить фильтры</button>
+                        <button id="resetFilters" class="btn btn-outline-secondary">Сбросить фильтры</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Панель управления -->
+        <div class="card mb-4">
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col-md-4">
+                        <label for="periodSelect" class="form-label">Период агрегации:</label>
+                        <select id="periodSelect" class="form-select">
+                            {% for period in periods %}
+                            <option value="{{ period }}" {% if period == 'week' %}selected{% endif %}>
+                                {{ period|capitalize }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-8 text-end">
+                        <button id="refreshChart" class="btn btn-primary">Обновить график</button>
+                        <button id="exportChart" class="btn btn-success">Экспорт PNG</button>
+                        <button id="clearChartCache" class="btn btn-outline-secondary">Очистить кэш</button>
+                        <span id="cacheStatus" class="badge bg-success ms-2">Кэш активен</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- График -->
+        <div class="card">
+            <div class="card-body">
+                <div class="chart-container" style="position: relative; height: 60vh; width: 100%">
+                    <canvas id="stackedChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Легенда -->
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5 class="mb-0">Легенда</h5>
+            </div>
+            <div class="card-body">
+                <div id="chartLegend" class="d-flex flex-wrap gap-3">
+                    <!-- Легенда генерируется автоматически -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Менеджер кэширования для графика
+    const chartCache = new ClientCache({{ config.CLIENT_CACHE_TTL }});
+
+    let chart = null;
+    let currentPeriod = 'week';
+    let currentStartDate = null;
+    let currentEndDate = null;
+    let currentFilters = {};
+
+    // Загрузка данных графика с кэшированием
+    async function loadChartData(startDate = null, endDate = null, filters = {}) {
+        try {
+            currentStartDate = startDate;
+            currentEndDate = endDate;
+            currentFilters = filters;
+
+            const cacheKey = `chart_${currentPeriod}_${startDate}_${endDate}_${JSON.stringify(filters)}`;
+
+            // Проверка кэша
+            const cachedData = chartCache.get(cacheKey);
+            if (cachedData) {
+                console.log('Данные графика загружены из кэша');
+                renderChart(cachedData);
+                renderLegend(cachedData);
+                updateChartCacheStatus();
+                return;
+            }
+
+            const params = new URLSearchParams({
+                period: currentPeriod
+            });
+
+            if (startDate) params.append('start_date', formatDateForAPI(startDate));
+            if (endDate) params.append('end_date', formatDateForAPI(endDate));
+            if (Object.keys(filters).length > 0) {
+                params.append('filters', JSON.stringify(filters));
+            }
+
+            const response = await fetch(`/api/chart-data?${params}`);
+            const data = await response.json();
+
+            if (response.ok) {
+                // Сохранение в кэш
+                chartCache.set(cacheKey, data);
+                updateChartCacheStatus();
+
+                renderChart(data);
+                renderLegend(data);
+            } else {
+                throw new Error(data.error || 'Ошибка загрузки данных графика');
+            }
+        } catch (error) {
+            console.error('Ошибка:', error);
+            showError('Не удалось загрузить данные графика: ' + error.message);
+        }
+    }
+
+    // Обновление статуса кэша графика
+    function updateChartCacheStatus() {
+        const cacheStatus = document.getElementById('cacheStatus');
+        const cacheSize = chartCache.size();
+
+        cacheStatus.textContent = `Кэш: ${cacheSize} записей`;
+        cacheStatus.className = `badge ${cacheSize > 0 ? 'bg-success' : 'bg-secondary'} ms-2`;
+    }
+
+    // Остальные функции аналогичны таблице с адаптацией под график
+    // ... (renderChart, renderLegend, exportChart и т.д.)
+
+    // Инициализация для графика
+    document.addEventListener('DOMContentLoaded', function() {
+        renderFilters(); // Та же функция что и для таблицы
+
+        const startDate = document.getElementById('startDate').value;
+        const endDate = document.getElementById('endDate').value;
+        loadChartData(startDate, endDate, {});
+
+        // Обработчики событий для графика
+        document.getElementById('periodSelect').addEventListener('change', function(e) {
+            currentPeriod = e.target.value;
+            loadChartData(currentStartDate, currentEndDate, currentFilters);
+        });
+
+        document.getElementById('applyFilters').addEventListener('click', function() {
+            const filters = gatherFilters(); // Та же функция что и для таблицы
+            loadChartData(currentStartDate, currentEndDate, filters);
+        });
+
+        document.getElementById('clearChartCache').addEventListener('click', function() {
+            chartCache.clear();
+            updateChartCacheStatus();
+            loadChartData(currentStartDate, currentEndDate, currentFilters);
+        });
+
+        updateChartCacheStatus();
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,417 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4">Таблица данных</h1>
+
+        <!-- Панель фильтров -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">Фильтры данных</h5>
+            </div>
+            <div class="card-body">
+                <div class="row" id="filtersPanel">
+                    <!-- Фильтры будут добавляться динамически -->
+                </div>
+                <div class="row mt-3">
+                    <div class="col-12">
+                        <button id="applyFilters" class="btn btn-primary">Применить фильтры</button>
+                        <button id="resetFilters" class="btn btn-outline-secondary">Сбросить фильтры</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Панель управления -->
+        <div class="card mb-4">
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col-md-6">
+                        <label for="pageSize" class="form-label">Записей на странице:</label>
+                        <select id="pageSize" class="form-select" style="width: auto; display: inline-block;">
+                            <option value="10">10</option>
+                            <option value="25">25</option>
+                            <option value="50" selected>50</option>
+                            <option value="100">100</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6 text-end">
+                        <button id="refreshData" class="btn btn-primary">Обновить данные</button>
+                        <button id="clearCache" class="btn btn-outline-secondary">Очистить кэш</button>
+                        <span id="cacheStatus" class="badge bg-success ms-2">Кэш активен</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Таблица -->
+        <div class="card">
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover">
+                        <thead>
+                            <tr>
+                                <th>Временная метка</th>
+                                <th>Продажи</th>
+                                <th>Маркетинг</th>
+                                <th>Операции</th>
+                                <th>Поддержка</th>
+                                <th>Регион</th>
+                                <th>Продукт</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tableBody">
+                            <!-- Данные загружаются через JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Пагинация -->
+                <nav aria-label="Навигация по страницам">
+                    <ul class="pagination justify-content-center" id="pagination">
+                        <!-- Пагинация генерируется через JavaScript -->
+                    </ul>
+                </nav>
+
+                <!-- Информация о странице -->
+                <div class="text-center text-muted" id="pageInfo">
+                    Загрузка...
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Менеджер кэширования на клиенте
+    class ClientCache {
+        constructor(ttl = 300000) { // 5 минут по умолчанию
+            this.ttl = ttl;
+            this.cache = new Map();
+        }
+
+        set(key, data) {
+            this.cache.set(key, {
+                data: data,
+                timestamp: Date.now()
+            });
+        }
+
+        get(key) {
+            const item = this.cache.get(key);
+            if (!item) return null;
+
+            if (Date.now() - item.timestamp > this.ttl) {
+                this.cache.delete(key);
+                return null;
+            }
+
+            return item.data;
+        }
+
+        clear() {
+            this.cache.clear();
+        }
+
+        size() {
+            return this.cache.size;
+        }
+    }
+
+    // Глобальные переменные
+    let currentPage = 1;
+    let currentPageSize = 50;
+    let currentStartDate = null;
+    let currentEndDate = null;
+    let currentFilters = {};
+    let clientCache = new ClientCache({{ config.CLIENT_CACHE_TTL }});
+
+    // Генерация фильтров
+    function renderFilters() {
+        const filtersPanel = document.getElementById('filtersPanel');
+
+        const filtersConfig = [
+            {
+                field: 'sales',
+                type: 'range',
+                label: 'Продажи',
+                min: {{ field_stats.numeric_fields.sales.min | default(0) }},
+                max: {{ field_stats.numeric_fields.sales.max | default(1000) }}
+            },
+            {
+                field: 'marketing',
+                type: 'range',
+                label: 'Маркетинг',
+                min: {{ field_stats.numeric_fields.marketing.min | default(0) }},
+                max: {{ field_stats.numeric_fields.marketing.max | default(500) }}
+            },
+            {
+                field: 'region',
+                type: 'select',
+                label: 'Регион',
+                options: {{ field_stats.categorical_fields.region | default([]) | tojson }}
+            },
+            {
+                field: 'product',
+                type: 'select',
+                label: 'Продукт',
+                options: {{ field_stats.categorical_fields.product | default([]) | tojson }}
+            }
+        ];
+
+        filtersPanel.innerHTML = filtersConfig.map(filter => `
+            <div class="col-md-3 mb-3">
+                <label class="form-label">${filter.label}</label>
+                ${filter.type === 'range' ? `
+                    <div class="row">
+                        <div class="col-6">
+                            <input type="number" class="form-control ${filter.field}-min"
+                                   placeholder="Мин" min="${filter.min}" max="${filter.max}">
+                        </div>
+                        <div class="col-6">
+                            <input type="number" class="form-control ${filter.field}-max"
+                                   placeholder="Макс" min="${filter.min}" max="${filter.max}">
+                        </div>
+                    </div>
+                ` : `
+                    <select class="form-control ${filter.field}-select" multiple>
+                        <option value="">Все</option>
+                        ${filter.options.map(opt => `<option value="${opt}">${opt}</option>`).join('')}
+                    </select>
+                `}
+            </div>
+        `).join('');
+    }
+
+    // Сбор значений фильтров
+    function gatherFilters() {
+        const filters = {};
+
+        // Числовые фильтры диапазона
+        ['sales', 'marketing', 'operations', 'support'].forEach(field => {
+            const minEl = document.querySelector(`.${field}-min`);
+            const maxEl = document.querySelector(`.${field}-max`);
+
+            if (minEl && maxEl) {
+                const minVal = minEl.value ? parseInt(minEl.value) : null;
+                const maxVal = maxEl.value ? parseInt(maxEl.value) : null;
+
+                if (minVal !== null || maxVal !== null) {
+                    filters[field] = {};
+                    if (minVal !== null) filters[field].min = minVal;
+                    if (maxVal !== null) filters[field].max = maxVal;
+                }
+            }
+        });
+
+        // Категориальные фильтры
+        ['region', 'product'].forEach(field => {
+            const selectEl = document.querySelector(`.${field}-select`);
+            if (selectEl) {
+                const selected = Array.from(selectEl.selectedOptions)
+                    .map(opt => opt.value)
+                    .filter(val => val !== '');
+
+                if (selected.length > 0) {
+                    filters[field] = selected;
+                }
+            }
+        });
+
+        return filters;
+    }
+
+    // Загрузка данных таблицы с кэшированием
+    async function loadTableData(page = 1, startDate = null, endDate = null, filters = {}) {
+        try {
+            currentPage = page;
+            currentStartDate = startDate;
+            currentEndDate = endDate;
+            currentFilters = filters;
+
+            // Генерация ключа кэша
+            const cacheKey = `table_${page}_${currentPageSize}_${startDate}_${endDate}_${JSON.stringify(filters)}`;
+
+            // Проверка кэша
+            const cachedData = clientCache.get(cacheKey);
+            if (cachedData) {
+                console.log('Данные загружены из кэша');
+                renderTable(cachedData);
+                renderPagination(cachedData);
+                updateCacheStatus();
+                return;
+            }
+
+            // Параметры запроса
+            const params = new URLSearchParams({
+                page: page,
+                limit: currentPageSize
+            });
+
+            if (startDate) params.append('start_date', formatDateForAPI(startDate));
+            if (endDate) params.append('end_date', formatDateForAPI(endDate));
+            if (Object.keys(filters).length > 0) {
+                params.append('filters', JSON.stringify(filters));
+            }
+
+            const response = await fetch(`/api/table-data?${params}`);
+            const data = await response.json();
+
+            if (response.ok) {
+                // Сохранение в кэш
+                clientCache.set(cacheKey, data);
+                updateCacheStatus();
+
+                renderTable(data);
+                renderPagination(data);
+            } else {
+                throw new Error(data.error || 'Ошибка загрузки данных');
+            }
+        } catch (error) {
+            console.error('Ошибка:', error);
+            showError('Не удалось загрузить данные: ' + error.message);
+        }
+    }
+
+    // Обновление статуса кэша
+    function updateCacheStatus() {
+        const cacheStatus = document.getElementById('cacheStatus');
+        const cacheSize = clientCache.size();
+
+        cacheStatus.textContent = `Кэш: ${cacheSize} записей`;
+        cacheStatus.className = `badge ${cacheSize > 0 ? 'bg-success' : 'bg-secondary'} ms-2`;
+    }
+
+    // Рендеринг таблицы
+    function renderTable(data) {
+        const tbody = document.getElementById('tableBody');
+        const pageInfo = document.getElementById('pageInfo');
+
+        if (!data.data || data.data.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" class="text-center">Нет данных для отображения</td></tr>';
+            pageInfo.textContent = 'Записи 0-0 из 0';
+            return;
+        }
+
+        tbody.innerHTML = data.data.map(record => `
+            <tr>
+                <td>${new Date(record.timestamp).toLocaleString()}</td>
+                <td>${record.sales?.toLocaleString() || 0}</td>
+                <td>${record.marketing?.toLocaleString() || 0}</td>
+                <td>${record.operations?.toLocaleString() || 0}</td>
+                <td>${record.support?.toLocaleString() || 0}</td>
+                <td>${record.region || '-'}</td>
+                <td>${record.product || '-'}</td>
+            </tr>
+        `).join('');
+
+        const startRecord = (data.page - 1) * data.limit + 1;
+        const endRecord = Math.min(data.page * data.limit, data.total);
+        pageInfo.textContent = `Записи ${startRecord}-${endRecord} из ${data.total}`;
+    }
+
+    // Рендеринг пагинации
+    function renderPagination(data) {
+        const pagination = document.getElementById('pagination');
+        const maxVisiblePages = 5;
+
+        if (data.pages <= 1) {
+            pagination.innerHTML = '';
+            return;
+        }
+
+        let startPage = Math.max(1, data.page - Math.floor(maxVisiblePages / 2));
+        let endPage = Math.min(data.pages, startPage + maxVisiblePages - 1);
+
+        if (endPage - startPage + 1 < maxVisiblePages) {
+            startPage = Math.max(1, endPage - maxVisiblePages + 1);
+        }
+
+        const pages = [];
+
+        pages.push(`
+            <li class="page-item ${data.page === 1 ? 'disabled' : ''}">
+                <a class="page-link" href="#" onclick="loadTableData(${data.page - 1}, currentStartDate, currentEndDate, currentFilters)">Назад</a>
+            </li>
+        `);
+
+        for (let i = startPage; i <= endPage; i++) {
+            pages.push(`
+                <li class="page-item ${i === data.page ? 'active' : ''}">
+                    <a class="page-link" href="#" onclick="loadTableData(${i}, currentStartDate, currentEndDate, currentFilters)">${i}</a>
+                </li>
+            `);
+        }
+
+        pages.push(`
+            <li class="page-item ${data.page === data.pages ? 'disabled' : ''}">
+                <a class="page-link" href="#" onclick="loadTableData(${data.page + 1}, currentStartDate, currentEndDate, currentFilters)">Вперед</a>
+            </li>
+        `);
+
+        pagination.innerHTML = pages.join('');
+    }
+
+    // Показать ошибку
+    function showError(message) {
+        // Можно заменить на toast notification
+        const alertDiv = document.createElement('div');
+        alertDiv.className = 'alert alert-danger alert-dismissible fade show';
+        alertDiv.innerHTML = `
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+        document.querySelector('main').prepend(alertDiv);
+
+        setTimeout(() => alertDiv.remove(), 5000);
+    }
+
+    // Инициализация
+    document.addEventListener('DOMContentLoaded', function() {
+        // Рендеринг фильтров
+        renderFilters();
+
+        // Загрузка начальных данных
+        const startDate = document.getElementById('startDate').value;
+        const endDate = document.getElementById('endDate').value;
+        loadTableData(1, startDate, endDate, {});
+
+        // Обработчики событий
+        document.getElementById('pageSize').addEventListener('change', function(e) {
+            currentPageSize = parseInt(e.target.value);
+            loadTableData(1, currentStartDate, currentEndDate, currentFilters);
+        });
+
+        document.getElementById('applyFilters').addEventListener('click', function() {
+            const filters = gatherFilters();
+            loadTableData(1, currentStartDate, currentEndDate, filters);
+        });
+
+        document.getElementById('resetFilters').addEventListener('click', function() {
+            // Сброс значений фильтров
+            document.querySelectorAll('input[type="number"]').forEach(input => input.value = '');
+            document.querySelectorAll('select').forEach(select => {
+                select.selectedIndex = -1;
+            });
+
+            loadTableData(1, currentStartDate, currentEndDate, {});
+        });
+
+        document.getElementById('refreshData').addEventListener('click', function() {
+            loadTableData(currentPage, currentStartDate, currentEndDate, currentFilters);
+        });
+
+        document.getElementById('clearCache').addEventListener('click', function() {
+            clientCache.clear();
+            updateCacheStatus();
+            loadTableData(1, currentStartDate, currentEndDate, currentFilters);
+        });
+
+        // Обновление статуса кэша
+        updateCacheStatus();
+    });
+</script>
+{% endblock %}
